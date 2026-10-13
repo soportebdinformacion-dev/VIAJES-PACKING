@@ -372,7 +372,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
    ===================================================================== */
 const CONFIG = {
   // 1) Pegue aquí la URL de la "aplicación web" de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw-ATo3eLFMedf9uuPygttGm5uckeOBJKBuHZjxuSH42ZpMW2_uwoIy0aX2K_1mWB0iaA/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyu3VBmI8oa4EtURsccdr3Gi0LynFELBhBgJzlvtd7uX7HurtXvTdVxxuTZEkAIlsFD/exec',
   ZONA: 'America/Lima',      // Zona horaria oficial
   TIMEOUT_MS: 25000,         // Tiempo máximo de espera por envío
   LOTE: 15,                  // Registros por envío al sincronizar
@@ -409,6 +409,7 @@ function uuid(){
    mientras el equipo tenga conexión.
    --------------------------------------------------------------------- */
 let offset = 0;
+let habilita = null;    // fecha/hora (ms) de habilitación manual (hoja "config", B2)
 let desactiva = null;   // fecha/hora (ms) de desactivación manual, definida en la hoja "config"
 const hora = () => Date.now() + offset;
 const fmtLima = new Intl.DateTimeFormat('en-US',{timeZone:CONFIG.ZONA,hourCycle:'h23',weekday:'short',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -423,13 +424,14 @@ function estadoHorario(ts){
   const p = limaParts(ts);
   const porHorario = p.dow === 3 || (p.dow === 4 && p.h < 17);
   const manual = desactiva !== null && ts >= desactiva;      // desactivada a mano
-  const abierto = porHorario && !manual;
+  const habil = habilita !== null && ts >= habilita;          // habilitada a mano
+  const abierto = (porHorario || habil) && !manual;
   let proxima = null;
   if (!abierto && !manual){
     const dias = ((3 - p.dow) + 7) % 7 || 7;
     proxima = new Date(Date.UTC(p.y, p.m-1, p.d + dias));
   }
-  return {abierto, p, proxima, manual};
+  return {abierto, p, proxima, manual, porHorario};
 }
 
 /* ---------------------------------------------------------------------
@@ -495,6 +497,8 @@ async function sincronizarReloj(timeout = 4000){
       await dbPut('meta', {k:'offset', v:offset});
       desactiva = (typeof r.desactiva === 'number') ? r.desactiva : null;
       await dbPut('meta', {k:'desactiva', v:desactiva});
+      habilita = (typeof r.habilita === 'number') ? r.habilita : null;
+      await dbPut('meta', {k:'habilita', v:habilita});
       return true;
     }
   }catch(e){}
@@ -603,6 +607,7 @@ function evaluarHorario(){
     $('abiertoTxt').textContent = e.p.dow === 3
       ? 'Formulario habilitado hoy (miércoles) hasta las 11:59 p. m. · el jueves cierra a las 05:00 p. m.'
       : 'Formulario habilitado hasta hoy (jueves) a las 05:00 p. m.';
+    if (!e.porHorario) $('abiertoTxt').textContent = `Formulario habilitado por el responsable (desde ${fechaLima(habilita)}).`;
     if (desactiva !== null) $('abiertoTxt').textContent += ` · Se desactivará el ${fechaLima(desactiva)}.`;
   } else if (e.manual){
     $('cerradoCuando').textContent = `La aplicación fue desactivada el ${fechaLima(desactiva)} (hora de Perú). Consulte con el responsable cuándo volverá a habilitarse.`;
@@ -886,6 +891,7 @@ function enlazar(){
   }
   const o = await dbGet('meta','offset'); if (o) offset = o.v;
   const dm = await dbGet('meta','desactiva'); if (dm) desactiva = dm.v;
+  const hm = await dbGet('meta','habilita'); if (hm) habilita = hm.v;
   enlazar();
   await limpiarHistorial();
   await cargarIndice();
