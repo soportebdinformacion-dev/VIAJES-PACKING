@@ -15,12 +15,17 @@
 const CONFIG = {
   // ▼▼▼ REEMPLACE por el ID de su archivo "REGISTROS VIAJES" ▼▼▼
   // (es el texto largo de la URL del Sheets, entre /d/ y /edit)
-  SPREADSHEET_ID: 'PEGAR_AQUI_EL_ID_DEL_GOOGLE_SHEETS',
+  SPREADSHEET_ID: '16m-c72EGGxrUZXHU3rkvKIizoixf8-bOVDfv59D4H9w',
   // ▲▲▲
 
   HOJA_MAESTROS: 'maestros',
   HOJA_PACKING: 'packing',
+  HOJA_CONFIG: 'config',   // aquí se escribe la FECHA DE DESACTIVACIÓN manual (celda B1)
   ZONA: 'America/Lima',
+
+  // La pestaña "Registros" de la app muestra solo los registros de la semana de pago actual
+  // (desde el último miércoles 00:00, hora de Lima). Ponga false para mostrar TODOS los registros.
+  SOLO_SEMANA_ACTUAL: true,
 
   // Un registro hecho SIN internet se acepta al sincronizar hasta estas horas después de creado
   // (siempre que haya sido creado dentro del horario permitido).
@@ -69,9 +74,15 @@ function manejarGet(p) {
   try {
     // Hora oficial del servidor (no requiere código): la usa la app para corregir el reloj del teléfono.
     if (p.action === 'estado') {
-      return { ok: true, ts: Date.now(), abierto: estaHabilitado(new Date()), zona: CONFIG.ZONA };
+      const f = leerFechasManuales();
+      return { ok: true, ts: Date.now(), abierto: estaHabilitado(new Date()), zona: CONFIG.ZONA,
+               desactiva: f.des ? f.des.getTime() : null, habilita: f.hab ? f.hab.getTime() : null };
     }
     if (!autorizado(p.codigo)) return fallo('AUTH', 'Código de acceso incorrecto.');
+    if (p.action === 'registros') {
+      const r = listarRegistros();
+      return { ok: true, total: r.total, unicos: r.datos.length, desde: r.desde, datos: r.datos };
+    }
     if (p.action === 'maestros') {
       const datos = listarMaestros();
       return { ok: true, total: datos.length, datos: datos };
@@ -122,7 +133,43 @@ function autorizado(codigo) {
 function estaHabilitado(fecha) {
   const dia = Number(Utilities.formatDate(fecha, CONFIG.ZONA, 'u')); // 1=lunes … 7=domingo
   const hora = Number(Utilities.formatDate(fecha, CONFIG.ZONA, 'H'));
-  return dia === 3 || (dia === 4 && hora < 17);
+  const porHorario = dia === 3 || (dia === 4 && hora < 17);
+  const f = leerFechasManuales();
+  const habManual = f.hab && fecha.getTime() >= f.hab.getTime();      // habilitada a mano
+  const desManual = f.des && fecha.getTime() >= f.des.getTime();      // desactivada a mano (prioridad)
+  return (porHorario || habManual) && !desManual;
+}
+
+/* Lee las fechas manuales de la hoja "config":
+   B1 = DESACTIVACIÓN (desde esa fecha/hora la app queda cerrada; tiene prioridad).
+   B2 = HABILITACIÓN  (desde esa fecha/hora la app queda abierta aunque no sea miércoles/jueves).
+   - Celda vacía = no se usa.
+   - Acepta una fecha/hora de Sheets o texto "dd/mm/aaaa" o "dd/mm/aaaa hh:mm" (hora de Lima).
+   - Si solo escribe la fecha, rige desde las 00:00 de ese día. */
+let _fechasManuales;   // se leen una sola vez por ejecución
+function leerFechasManuales() {
+  if (_fechasManuales !== undefined) return _fechasManuales;
+  _fechasManuales = { des: null, hab: null };
+  try {
+    const hoja = abrirLibro().getSheetByName(CONFIG.HOJA_CONFIG);
+    if (!hoja) return _fechasManuales;
+    const v = hoja.getRange('B1:B2').getValues();
+    _fechasManuales.des = interpretarFecha(v[0][0]);
+    _fechasManuales.hab = interpretarFecha(v[1][0]);
+  } catch (ex) { console.error(ex); }
+  return _fechasManuales;
+}
+function leerDesactivacion() { return leerFechasManuales().des; }
+function leerHabilitacion() { return leerFechasManuales().hab; }
+function interpretarFecha(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) return v;
+  if (typeof v === 'string' && v.trim()) {
+    const t = v.trim();
+    const conHora = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}$/.test(t);
+    const soloFecha = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(t);
+    if (conHora || soloFecha) return Utilities.parseDate(conHora ? t : t + ' 00:00', CONFIG.ZONA, 'd/M/yyyy H:mm');
+  }
+  return null;
 }
 
 /* Valida el momento en que el colaborador creó el registro (puede ser anterior si trabajó sin internet). */
@@ -188,6 +235,42 @@ function listarMaestros() {
   if (!hoja) throw new Error('No existe la hoja "' + CONFIG.HOJA_MAESTROS + '"');
   const mapa = leerMaestros(hoja);
   return Object.keys(mapa).map(function (k) { return [mapa[k].dni, mapa[k].nombre, mapa[k].celular]; });
+}
+
+/* Miércoles 00:00 (hora de Lima) de la semana de pago vigente */
+function inicioSemanaPago(ahora) {
+  const u = Number(Utilities.formatDate(ahora, CONFIG.ZONA, 'u'));       // 1=lunes … 7=domingo
+  const dias = (u - 3 + 7) % 7;                                         // días desde el último miércoles
+  const hoy0 = Utilities.parseDate(Utilities.formatDate(ahora, CONFIG.ZONA, 'yyyy-MM-dd') + ' 00:00', CONFIG.ZONA, 'yyyy-MM-dd HH:mm');
+  return new Date(hoy0.getTime() - dias * 86400000);
+}
+
+/* Devuelve SOLO DNI, APELLIDOS Y NOMBRES y FECHA DE REGISTRO (la más reciente) de cada DNI.
+   No se envía celular, área ni rutas: la pestaña es solo de visualización. */
+function listarRegistros() {
+  const hoja = abrirLibro().getSheetByName(CONFIG.HOJA_PACKING);
+  if (!hoja) throw new Error('No existe la hoja "' + CONFIG.HOJA_PACKING + '"');
+  const desde = inicioSemanaPago(new Date());
+  const n = hoja.getLastRow() - 1;
+  const pos = {}, datos = [];
+  let total = 0;
+  if (n > 0) {
+    hoja.getRange(2, 1, n, 3).getValues().forEach(function (f) {
+      if (CONFIG.SOLO_SEMANA_ACTUAL && !(f[0] instanceof Date && f[0].getTime() >= desde.getTime())) return;
+      const dni = normalizarDniGuardado(f[1]);
+      if (dni.length !== 8) return;
+      total++;
+      const ms = (f[0] instanceof Date && !isNaN(f[0].getTime())) ? f[0].getTime() : null;   // FECHA REGISTRO
+      if (pos[dni] === undefined) {
+        pos[dni] = datos.length;
+        datos.push([dni, limpiarNombre(f[2]), ms]);
+      } else if (ms !== null && (datos[pos[dni]][2] === null || ms > datos[pos[dni]][2])) {
+        datos[pos[dni]][2] = ms;                         // si hay varios, se muestra el más reciente
+      }
+    });
+  }
+  datos.sort(function (a, b) { return a[1].localeCompare(b[1], 'es'); });
+  return { datos: datos, total: total, desde: desde.getTime() };
 }
 
 function crearContexto() {
@@ -331,6 +414,15 @@ function configurarHojas() {
   const sp = preparar(CONFIG.HOJA_PACKING, ENC_PACKING, [2, 4, 8]);
   sp.getRange(2, 1, sp.getMaxRows() - 1, 1).setNumberFormat('dd/mm/yyyy hh:mm:ss');
   sp.getRange(2, 10, sp.getMaxRows() - 1, 1).setNumberFormat('dd/mm/yyyy hh:mm:ss');
+
+  // Hoja "config": celda B1 = fecha de desactivación manual (déjela vacía para no desactivar)
+  let cfg = libro.getSheetByName(CONFIG.HOJA_CONFIG);
+  if (!cfg) cfg = libro.insertSheet(CONFIG.HOJA_CONFIG);
+  cfg.getRange('A1').setValue('FECHA Y HORA DE DESACTIVACION').setFontWeight('bold');
+  cfg.getRange('A2').setValue('FECHA Y HORA DE HABILITACION').setFontWeight('bold');
+  cfg.getRange('B1:B2').setNumberFormat('dd/mm/yyyy hh:mm');
+  cfg.getRange('A4').setValue('B1 = desde esta fecha/hora la app queda DESACTIVADA (tiene prioridad). B2 = desde esta fecha/hora la app queda HABILITADA aunque no sea miércoles/jueves. Ejemplo: 16/10/2026 17:00. Deje vacío lo que no use.');
+  cfg.setColumnWidth(1, 260); cfg.setColumnWidth(2, 160);
 
   Logger.log('Listo. Hojas configuradas y zona horaria = ' + CONFIG.ZONA);
 }
