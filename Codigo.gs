@@ -27,6 +27,10 @@ const CONFIG = {
   // (desde el último miércoles 00:00, hora de Lima). Ponga false para mostrar TODOS los registros.
   SOLO_SEMANA_ACTUAL: true,
 
+  // Modificación de rutas desde la pestaña "Registros"
+  MAX_MODIFICACIONES: 2,               // intentos permitidos por registro; al agotarse, el botón queda bloqueado
+  PEDIR_CELULAR_PARA_MODIFICAR: true,  // el colaborador confirma con su celular que el registro es suyo (false = no pedirlo)
+
   // Un registro hecho SIN internet se acepta al sincronizar hasta estas horas después de creado
   // (siempre que haya sido creado dentro del horario permitido).
   GRACIA_SYNC_HORAS: 72,
@@ -40,10 +44,10 @@ const AREAS = ['ALMACÉN','CALIDAD AGRÍCOLA','CÁMARA','DESPACHOS','ETIQUETADO'
   'MANTENIMIENTO','OPERACIONES','PRE FRÍO','RECEPCIÓN','SADEMA','SANEAMIENTO','SSOMA','TI'];
 const RUTAS = ['CHONGOYAPE','CUCULI','LA CRIA','PATAPO','TUMAN','CHICLAYO','LAMBAYEQUE','MORROPE','OLMOS','LA PAREJA','PIURA CENTRO','NINGUNO'];
 
-// Encabezados. Las columnas A–G NO se modifican; H–J son de control interno.
+// Encabezados. Las columnas A–G NO se modifican; H–M son de control interno.
 const ENC_MAESTROS = ['DNI','APELLIDOS Y NOMBRES','CELULAR'];
 const ENC_PACKING = ['FECHA REGISTRO','DNI','NOMBRES Y APELLIDOS','CELULAR','AREA','RUTA SALIDA','RUTA RETORNO',
-  'ID REGISTRO','ORIGEN','FECHA SINCRONIZACION'];
+  'ID REGISTRO','ORIGEN','FECHA SINCRONIZACION','MODIFICACIONES','FECHA ULTIMA MODIFICACION','HISTORIAL MODIFICACIONES'];
 
 /* =====================================================================
    PUNTOS DE ENTRADA (la aplicación web)
@@ -81,7 +85,8 @@ function manejarGet(p) {
     if (!autorizado(p.codigo)) return fallo('AUTH', 'Código de acceso incorrecto.');
     if (p.action === 'registros') {
       const r = listarRegistros();
-      return { ok: true, total: r.total, unicos: r.datos.length, desde: r.desde, datos: r.datos };
+      return { ok: true, total: r.total, unicos: r.datos.length, desde: r.desde, datos: r.datos,
+               maxMod: CONFIG.MAX_MODIFICACIONES, pedirCelular: CONFIG.PEDIR_CELULAR_PARA_MODIFICAR };
     }
     if (p.action === 'maestros') {
       const datos = listarMaestros();
@@ -97,6 +102,9 @@ function manejarGet(p) {
 function manejarPost(b) {
   try {
     if (!autorizado(b.codigo)) return fallo('AUTH', 'Código de acceso incorrecto.');
+    if (b.action === 'modificarRuta') {
+      return modificarRuta(b);
+    }
     if (b.action === 'sincronizar') {
       return { ok: true, resultados: sincronizarPendientes(b.items) };
     }
@@ -245,8 +253,9 @@ function inicioSemanaPago(ahora) {
   return new Date(hoy0.getTime() - dias * 86400000);
 }
 
-/* Devuelve SOLO DNI, APELLIDOS Y NOMBRES y FECHA DE REGISTRO (la más reciente) de cada DNI.
-   No se envía celular, área ni rutas: la pestaña es solo de visualización. */
+/* Devuelve, por cada DNI, su registro más reciente con: DNI, APELLIDOS Y NOMBRES, FECHA DE REGISTRO,
+   RUTA SALIDA, RUTA RETORNO, ID REGISTRO y cuántas modificaciones lleva.
+   No se envía celular ni área: la pestaña es de consulta y modificación de rutas. */
 function listarRegistros() {
   const hoja = abrirLibro().getSheetByName(CONFIG.HOJA_PACKING);
   if (!hoja) throw new Error('No existe la hoja "' + CONFIG.HOJA_PACKING + '"');
@@ -255,22 +264,103 @@ function listarRegistros() {
   const pos = {}, datos = [];
   let total = 0;
   if (n > 0) {
-    hoja.getRange(2, 1, n, 3).getValues().forEach(function (f) {
+    const cols = Math.min(11, hoja.getMaxColumns());
+    hoja.getRange(2, 1, n, cols).getValues().forEach(function (f) {
       if (CONFIG.SOLO_SEMANA_ACTUAL && !(f[0] instanceof Date && f[0].getTime() >= desde.getTime())) return;
       const dni = normalizarDniGuardado(f[1]);
       if (dni.length !== 8) return;
       total++;
-      const ms = (f[0] instanceof Date && !isNaN(f[0].getTime())) ? f[0].getTime() : null;   // FECHA REGISTRO
+      const ms = (f[0] instanceof Date && !isNaN(f[0].getTime())) ? f[0].getTime() : null;
+      const reg = [dni, limpiarNombre(f[2]), ms, String(f[5] || ''), String(f[6] || ''), String(f[7] || ''), Number(f[10]) || 0];
       if (pos[dni] === undefined) {
         pos[dni] = datos.length;
-        datos.push([dni, limpiarNombre(f[2]), ms]);
-      } else if (ms !== null && (datos[pos[dni]][2] === null || ms > datos[pos[dni]][2])) {
-        datos[pos[dni]][2] = ms;                         // si hay varios, se muestra el más reciente
+        datos.push(reg);
+      } else {
+        const act = datos[pos[dni]];
+        if (ms !== null && (act[2] === null || ms >= act[2])) datos[pos[dni]] = reg;   // se queda el más reciente
       }
     });
   }
   datos.sort(function (a, b) { return a[1].localeCompare(b[1], 'es'); });
   return { datos: datos, total: total, desde: desde.getTime() };
+}
+
+/* =====================================================================
+   MODIFICAR RUTAS  (máximo CONFIG.MAX_MODIFICACIONES por registro)
+   Solo cambia RUTA SALIDA y/o RUTA RETORNO del registro, solo con el formulario habilitado
+   y solo para registros de la semana de pago actual. Deja constancia en las columnas K–M.
+   ===================================================================== */
+function asegurarColumnas(hoja) {
+  if (hoja.getMaxColumns() < ENC_PACKING.length) hoja.insertColumnsAfter(hoja.getMaxColumns(), ENC_PACKING.length - hoja.getMaxColumns());
+}
+
+function modificarRuta(b) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (ex) { return fallo('OCUPADO', 'El servidor está ocupado. Intente de nuevo en unos segundos.'); }
+  try {
+    const id = String(b.id || '');
+    const dni = String(b.dni || '').trim();
+    if (!id || !/^\d{8}$/.test(dni)) return fallo('DATOS', 'Solicitud no válida.');
+    if (RUTAS.indexOf(b.rutaSalida) < 0 || RUTAS.indexOf(b.rutaRetorno) < 0) return fallo('RUTA_INVALIDA', 'Ruta no válida.');
+
+    const ahora = new Date();
+    if (!estaHabilitado(ahora)) return fallo('FUERA_HORARIO', 'EL PLAZO DE REGISTRO HA FINALIZADO. Ya no se pueden modificar las rutas.');
+
+    const hoja = abrirLibro().getSheetByName(CONFIG.HOJA_PACKING);
+    if (!hoja) throw new Error('No existe la hoja "' + CONFIG.HOJA_PACKING + '"');
+    asegurarColumnas(hoja);
+    const n = hoja.getLastRow() - 1;
+    if (n < 1) return fallo('NO_EXISTE', 'No se encontró el registro.');
+    const ids = hoja.getRange(2, 8, n, 1).getValues();
+    let fila = -1;
+    for (let i = 0; i < ids.length; i++) { if (String(ids[i][0]) === id) { fila = i + 2; break; } }
+    if (fila < 0) return fallo('NO_EXISTE', 'No se encontró el registro.');
+
+    const r = hoja.getRange(fila, 1, 1, 13).getValues()[0];
+    if (normalizarDniGuardado(r[1]) !== dni) return fallo('DATOS', 'El registro no corresponde a ese DNI.');
+    if (!(r[0] instanceof Date) || r[0].getTime() < inicioSemanaPago(ahora).getTime()) {
+      return fallo('SEMANA_ANTERIOR', 'Este registro es de una semana de pago anterior y ya no se puede modificar.');
+    }
+
+    const usadas = Number(r[10]) || 0;
+    if (usadas >= CONFIG.MAX_MODIFICACIONES) {
+      return fallo('LIMITE', 'Ya usó las ' + CONFIG.MAX_MODIFICACIONES + ' modificaciones permitidas. No se pueden hacer más cambios.',
+        { modificaciones: usadas, restantes: 0 });
+    }
+
+    if (CONFIG.PEDIR_CELULAR_PARA_MODIFICAR) {
+      const cache = CacheService.getScriptCache();
+      const clave = 'celfail_' + dni;
+      const fallos = Number(cache.get(clave)) || 0;
+      if (fallos >= 5) return fallo('BLOQUEO', 'Demasiados intentos con un celular incorrecto. Espere 10 minutos o consulte al responsable.');
+      if (normalizarCelular(b.celular) !== String(r[3]).replace(/\D/g, '')) {
+        cache.put(clave, String(fallos + 1), 600);
+        return fallo('CELULAR', 'El celular no coincide con el de este registro. No se gastó ningún intento.');
+      }
+      cache.remove(clave);
+    }
+
+    const sal = String(r[5]), ret = String(r[6]);
+    if (sal === b.rutaSalida && ret === b.rutaRetorno) {
+      return fallo('SIN_CAMBIOS', 'Las rutas ya están registradas con esos valores. No se gastó ningún intento.');
+    }
+
+    const linea = Utilities.formatDate(ahora, CONFIG.ZONA, 'dd/MM/yyyy HH:mm') +
+      ' | SALIDA: ' + sal + ' > ' + b.rutaSalida + ' | RETORNO: ' + ret + ' > ' + b.rutaRetorno;
+    const hist = String(r[12] || '');
+    hoja.getRange(fila, 6, 1, 2).setValues([[b.rutaSalida, b.rutaRetorno]]);   // F y G
+    hoja.getRange(fila, 11).setValue(usadas + 1);                              // K
+    hoja.getRange(fila, 12).setNumberFormat('dd/mm/yyyy hh:mm:ss').setValue(ahora);   // L
+    hoja.getRange(fila, 13).setValue(hist ? hist + '\n' + linea : linea);      // M
+    SpreadsheetApp.flush();
+    return { ok: true, estado: 'MODIFICADO', rutaSalida: b.rutaSalida, rutaRetorno: b.rutaRetorno,
+             modificaciones: usadas + 1, restantes: CONFIG.MAX_MODIFICACIONES - (usadas + 1) };
+  } catch (ex) {
+    console.error(ex);
+    return fallo('SERVIDOR', 'Error interno del servidor.');
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function crearContexto() {
@@ -400,6 +490,7 @@ function configurarHojas() {
   const preparar = function (nombre, encabezados, colsTexto) {
     let h = libro.getSheetByName(nombre);
     if (!h) h = libro.insertSheet(nombre);
+    if (h.getMaxColumns() < encabezados.length) h.insertColumnsAfter(h.getMaxColumns(), encabezados.length - h.getMaxColumns());
     const actual = h.getRange(1, 1, 1, encabezados.length).getValues()[0];
     encabezados.forEach(function (t, i) {
       if (!actual[i]) h.getRange(1, i + 1).setValue(t);              // solo completa los vacíos
