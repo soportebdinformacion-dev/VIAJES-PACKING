@@ -142,4 +142,16 @@ Una PWA **solo se instala y funciona sin internet desde una dirección HTTPS**. 
 
 - No necesita volver a publicar el script ni subir archivos: los teléfonos con internet se actualizan en cerca de 1 minuto.
 - Los registros hechos antes de esa fecha (incluso sin internet) siguen sincronizándose.
-- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v2`).
+- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v3`).
+
+### Habilitar la app manualmente (fuera de miércoles y jueves)
+
+En la hoja **`config`** (ejecute `configurarHojas` otra vez para que aparezca la fila nueva):
+
+| Celda | Qué hace |
+|---|---|
+| **B2 – FECHA Y HORA DE HABILITACION** | Desde esa fecha/hora la app queda **abierta** aunque no sea miércoles ni jueves. Para habilitarla **ahora**, escriba una fecha y hora ya pasadas (ej. la de hoy a las 00:00). |
+| **B1 – FECHA Y HORA DE DESACTIVACION** | Desde esa fecha/hora la app queda **cerrada**. Tiene prioridad sobre B2 y sobre el horario normal. |
+
+Ejemplo: B2 = `12/10/2026 08:00` y B1 = `13/10/2026 18:00` → la app está abierta desde el lunes 12 a las 8:00 hasta el martes 13 a las 18:00.
+Si deja B2 con una fecha pasada y B1 vacío, la app **seguirá abierta**; para volver al horario normal, borre B2.
