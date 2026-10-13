@@ -359,7 +359,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     </div>
   </section>
 
-  <footer>Agrícola Huarmey · Packing – Campamento · Hora de referencia: Perú (America/Lima)</footer>
+  <footer>Agrícola Huarmey · Packing – Campamento</footer>
 </main>
 
 <!-- =================== DIÁLOGO: NUEVO COLABORADOR =================== -->
@@ -373,11 +373,11 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     <p id="e-nDni" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <label for="nNombre"><svg class="ico"><use href="#i-user"/></svg>APELLIDOS Y NOMBRES</label>
-    <input id="nNombre" type="text" autocapitalize="characters" placeholder="Ej.: CHAVEZ JULCA JOSE">
+    <input id="nNombre" type="text" autocapitalize="characters" placeholder="Ej.: PRADO CHINGUEL ANTONIO">
     <p id="e-nNombre" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <label for="nCel"><svg class="ico"><use href="#i-phone"/></svg>CELULAR</label>
-    <input id="nCel" type="tel" inputmode="numeric" maxlength="14" placeholder="Ej.: 987654321">
+    <input id="nCel" type="tel" inputmode="numeric" maxlength="14" placeholder="Ej.: 988526321">
     <p id="e-nCel" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <div id="nDuplicado" class="aviso ambar nota-dlg" hidden>
@@ -804,7 +804,7 @@ async function guardar(ev){
     const quien = `<p><b>${esc(item.datos.nombre)}</b> · DNI ${esc(item.datos.dni)}</p>`;
     const rutas = `<p>${esc(item.datos.area)} · Salida: <b>${esc(item.datos.rutaSalida)}</b> · Retorno: <b>${esc(item.datos.rutaRetorno)}</b></p>`;
     if (f.estado === 'Sincronizado')
-      mostrar('ok','Registro guardado y sincronizado', quien + rutas + `<p>${fechaLima(new Date(item.creadoEn).getTime())} · Ya figura en Google Sheets.</p>`);
+      mostrar('ok','Registro guardado y sincronizado', quien + rutas + `<p>${fechaLima(new Date(item.creadoEn).getTime())} · Guardado en la base datos.</p>`);
     else if (f.estado === 'Error')
       mostrar('err','Error al registrar', quien + `<p>${esc(f.error)}</p><p>Puede corregirlo o reintentar desde “Envíos por sincronizar”.</p>`);
     else
