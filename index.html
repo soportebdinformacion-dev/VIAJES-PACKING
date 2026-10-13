@@ -158,21 +158,33 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
 
 
 /* ---------- Pestañas y lista de registros ---------- */
+.wrap.ancho{max-width:1040px}
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#E4ECD9;padding:5px;border-radius:15px;margin:14px 0 0}
 .tab{display:flex;align-items:center;justify-content:center;gap:8px;min-height:50px;border:0;border-radius:11px;background:transparent;color:var(--tinta-2);font:inherit;font-size:15.5px;font-weight:700;cursor:pointer}
 .tab[aria-selected="true"]{background:var(--blanco);color:var(--verde-osc);box-shadow:0 1px 3px rgba(36,48,36,.18)}
-.tabla{max-height:62vh;overflow:auto;margin-top:12px;border:1px solid var(--linea);border-radius:12px;padding:0 12px;-webkit-overflow-scrolling:touch}
-.fila{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #EDF2E6;font-size:15px;align-items:start}
+.tabla{max-height:68vh;overflow:auto;margin-top:12px;border:1px solid var(--linea);border-radius:12px;padding:0 12px;-webkit-overflow-scrolling:touch}
+.fila{display:grid;grid-template-columns:96px 1fr;gap:3px 10px;padding:12px 0;border-bottom:1px solid #EDF2E6;font-size:15px;align-items:start}
 .fila:last-child{border-bottom:0}
-.fila .dni{font-variant-numeric:tabular-nums;font-weight:700;color:var(--verde-osc)}
-.fila .nom{overflow-wrap:anywhere}
-.fila.cab{position:sticky;top:0;background:var(--blanco);font-size:12.5px;font-weight:800;color:var(--tinta-2);padding:9px 0;z-index:1}
-.fila.cab .dni{color:var(--tinta-2)}
-.fila .fec{grid-column:2;font-size:13px;color:var(--tinta-2);font-variant-numeric:tabular-nums}
-.fila.cab .fec{display:none}
-@media(min-width:520px){.fila{grid-template-columns:92px 1fr 140px}.fila .fec{grid-column:auto;font-size:14.5px;color:var(--tinta)}.fila.cab .fec{display:block}.fila .pre{display:none}}
+.fila .dni{font-weight:700;color:var(--verde-osc);font-variant-numeric:tabular-nums}
+.fila .nom{overflow-wrap:anywhere;font-weight:600}
+.fila .fec,.fila .rs,.fila .rr{grid-column:2;font-size:13.5px;color:var(--tinta-2)}
+.fila .rs b,.fila .rr b{color:var(--tinta);font-weight:700}
+.fila .ac{grid-column:1/-1;display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.fila .pre{font-style:normal}
+.fila.cab{display:none}
+.quedan{font-size:12.5px;color:var(--tinta-2);font-weight:600}
+.btn.bloq{background:#ECEFE8;color:#76806F;border:1.5px solid #D5DCCC}
+.btn.chico svg.ico{width:1.1em;height:1.1em}
 .conteo{margin:10px 2px 0;color:var(--tinta-2);font-size:13.5px}
 .vacio{padding:18px 4px;color:var(--tinta-2);display:flex;gap:10px;align-items:flex-start;font-size:14.5px}
+@media(min-width:880px){
+  .fila{grid-template-columns:96px minmax(160px,1fr) 128px 112px 112px 132px;gap:10px;align-items:center}
+  .fila .fec,.fila .rs,.fila .rr{grid-column:auto;font-size:14.5px;color:var(--tinta)}
+  .fila .ac{grid-column:auto;margin-top:0;flex-direction:column;align-items:stretch;gap:3px}
+  .fila .pre{display:none}
+  .fila.cab{display:grid;position:sticky;top:0;background:var(--blanco);padding:9px 0;z-index:1}
+  .fila.cab span{font-size:12px;font-weight:800;color:var(--tinta-2)}
+}
 
 @media(prefers-reduced-motion:reduce){.girar,.spin{animation-duration:3s}}
 </style>
@@ -223,7 +235,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
   <img src="membrete.png" width="1489" height="363" alt="Agrícola Huarmey – Campamento Huarmey – Registro de Ingresos y Salidas">
 </header>
 
-<main class="wrap">
+<main class="wrap" id="wrap">
 
   <section class="titulo">
     <h1>REGISTRO DE SALIDAS &amp; RETORNOS</h1>
@@ -353,13 +365,14 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
         <input id="bLista" type="text" inputmode="search" enterkeyhint="search" placeholder="Ej.: 42048377 o CHAVEZ" autocapitalize="characters" spellcheck="false" autocomplete="off">
         <button id="limpiarLista" type="button" class="limpiar" aria-label="Borrar búsqueda" hidden><svg class="ico"><use href="#i-x"/></svg></button>
       </div>
+      <div id="listaAviso" class="aviso verde" hidden role="status"></div>
       <p id="listaConteo" class="conteo" aria-live="polite"></p>
       <div id="listaRegs" class="tabla"></div>
       <div class="accion" style="margin-bottom:0"><button id="btnRefrescar" type="button" class="btn claro"><svg class="ico"><use href="#i-sync"/></svg><span id="btnRefTxt">Actualizar lista</span></button></div>
     </div>
   </section>
 
-  <footer>Agrícola Huarmey · Packing – Campamento</footer>
+  <footer>Agrícola Huarmey · Packing – Campamento · Hora de referencia: Perú (America/Lima)</footer>
 </main>
 
 <!-- =================== DIÁLOGO: NUEVO COLABORADOR =================== -->
@@ -373,11 +386,11 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     <p id="e-nDni" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <label for="nNombre"><svg class="ico"><use href="#i-user"/></svg>APELLIDOS Y NOMBRES</label>
-    <input id="nNombre" type="text" autocapitalize="characters" placeholder="Ej.: PRADO CHINGUEL ANTONIO">
+    <input id="nNombre" type="text" autocapitalize="characters" placeholder="Ej.: CHAVEZ JULCA JOSE">
     <p id="e-nNombre" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <label for="nCel"><svg class="ico"><use href="#i-phone"/></svg>CELULAR</label>
-    <input id="nCel" type="tel" inputmode="numeric" maxlength="14" placeholder="Ej.: 988526321">
+    <input id="nCel" type="tel" inputmode="numeric" maxlength="14" placeholder="Ej.: 987654321">
     <p id="e-nCel" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
 
     <div id="nDuplicado" class="aviso ambar nota-dlg" hidden>
@@ -388,6 +401,36 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     <div class="botones">
       <button type="button" id="nCancelar" class="btn claro">Cancelar</button>
       <button type="submit" id="nGuardar" class="btn primario"><span class="spin"></span><span id="nGuardarTxt">GUARDAR</span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- =================== DIÁLOGO: MODIFICAR RUTAS =================== -->
+<dialog id="dlgMod">
+  <form id="formMod" class="dlg" novalidate autocomplete="off" method="dialog">
+    <h2><svg class="ico" style="color:var(--rojo)"><use href="#i-swap"/></svg>Modificar rutas</h2>
+    <p class="ayuda" id="mQuien"></p>
+    <div class="aviso ambar nota-dlg"><svg class="ico"><use href="#i-alert"/></svg><p id="mRestan"></p></div>
+
+    <label for="mSalida"><svg class="ico"><use href="#i-sale"/></svg>RUTA SALIDA</label>
+    <select id="mSalida"></select>
+    <p id="e-mSalida" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
+
+    <label for="mRetorno"><svg class="ico"><use href="#i-vuelve"/></svg>RUTA RETORNO</label>
+    <select id="mRetorno"></select>
+    <p id="e-mRetorno" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
+
+    <div id="mCelBox">
+      <label for="mCel"><svg class="ico"><use href="#i-phone"/></svg>CELULAR (para confirmar que es su registro)</label>
+      <input id="mCel" type="tel" inputmode="numeric" maxlength="14" placeholder="Ej.: 987654321">
+      <p id="e-mCel" class="error-msg"><svg class="ico"><use href="#i-alert"/></svg><span></span></p>
+    </div>
+
+    <div id="mError" class="aviso rojo nota-dlg" hidden><svg class="ico"><use href="#i-x-circle"/></svg><p id="mErrorTxt"></p></div>
+
+    <div class="botones">
+      <button type="button" id="mCancelar" class="btn claro">Cancelar</button>
+      <button type="submit" id="mGuardar" class="btn primario"><span class="spin"></span><span id="mGuardarTxt">GUARDAR CAMBIOS</span></button>
     </div>
   </form>
 </dialog>
@@ -414,7 +457,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
    ===================================================================== */
 const CONFIG = {
   // 1) Pegue aquí la URL de la "aplicación web" de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx9lrXkZI44wSLv-agCQIwaUIjBKMJ0CbCuy5cDiRleFM6-Sqwi2867w_KY8MhMErqSww/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxtRNI_ItPCh4GQ-f--UZkyNUXdXiuEfiYGR060FhrlYmPU_0Xx9P5WDUSvNmSsg9NMdA/exec',
   ZONA: 'America/Lima',      // Zona horaria oficial
   TIMEOUT_MS: 25000,         // Tiempo máximo de espera por envío
   LOTE: 15,                  // Registros por envío al sincronizar
@@ -629,6 +672,8 @@ function llenarSelects(){
   $('area').innerHTML = '<option value="">SELECCIONE SU ÁREA</option>' + AREAS.map(a => `<option value="${a[1]}">${a[0]} ${a[1]}</option>`).join('');
   const r = '<option value="">SELECCIONE…</option>' + RUTAS.map(x => `<option value="${x}">${x}</option>`).join('');
   $('rutaSalida').innerHTML = r; $('rutaRetorno').innerHTML = r;
+  const rm = RUTAS.map(x => `<option value="${x}">${x}</option>`).join('');
+  $('mSalida').innerHTML = rm; $('mRetorno').innerHTML = rm;
 }
 function err(campo, msg){
   const p = $('e-' + campo); if (!p) return;
@@ -640,8 +685,10 @@ function err(campo, msg){
    Horario: abrir / cerrar el formulario
    --------------------------------------------------------------------- */
 const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+let ultimoAbierto = null;
 function evaluarHorario(){
   const e = estadoHorario(hora());
+  if (ultimoAbierto !== e.abierto){ const antes = ultimoAbierto; ultimoAbierto = e.abierto; if (antes !== null && db && !$('vistaLista').hidden) pintarLista(); }
   $('fs').disabled = !e.abierto;
   $('cerrado').hidden = e.abierto;
   $('abierto').hidden = !e.abierto;
@@ -804,7 +851,7 @@ async function guardar(ev){
     const quien = `<p><b>${esc(item.datos.nombre)}</b> · DNI ${esc(item.datos.dni)}</p>`;
     const rutas = `<p>${esc(item.datos.area)} · Salida: <b>${esc(item.datos.rutaSalida)}</b> · Retorno: <b>${esc(item.datos.rutaRetorno)}</b></p>`;
     if (f.estado === 'Sincronizado')
-      mostrar('ok','Registro guardado y sincronizado', quien + rutas + `<p>${fechaLima(new Date(item.creadoEn).getTime())} · Guardado en la base datos.</p>`);
+      mostrar('ok','Registro guardado y sincronizado', quien + rutas + `<p>${fechaLima(new Date(item.creadoEn).getTime())} · Ya figura en Google Sheets.</p>`);
     else if (f.estado === 'Error')
       mostrar('err','Error al registrar', quien + `<p>${esc(f.error)}</p><p>Puede corregirlo o reintentar desde “Envíos por sincronizar”.</p>`);
     else
@@ -886,9 +933,11 @@ function pedirCodigo(){
 }
 
 /* ---------------------------------------------------------------------
-   Pestaña "Registros": solo visualización (DNI y APELLIDOS Y NOMBRES)
+   Pestaña "Registros": consulta y modificación de rutas
+   (el servidor decide: máximo de intentos, horario y propiedad del registro)
    --------------------------------------------------------------------- */
 let REGS_SERVER = [], REGS_TS = 0, REGS = [];
+let MAX_MOD = 2, PEDIR_CEL = true;
 const MAX_FILAS = 150;
 const inicioSemanaPago = ts => {                         // miércoles 00:00 de Lima (en ms)
   const p = limaParts(ts), dias = (p.dow - 3 + 7) % 7;
@@ -896,16 +945,18 @@ const inicioSemanaPago = ts => {                         // miércoles 00:00 de 
 };
 async function cargarRegsCache(){
   const m = await dbGet('meta','registros');
-  if (m && m.v){ REGS_SERVER = m.v.lista || []; REGS_TS = m.v.ts || 0; }
+  if (m && m.v){ REGS_SERVER = m.v.lista || []; REGS_TS = m.v.ts || 0; MAX_MOD = m.v.max || 2; PEDIR_CEL = m.v.pedir !== false; }
 }
+const guardarRegsCache = () => dbPut('meta', {k:'registros', v:{lista:REGS_SERVER, ts:REGS_TS, max:MAX_MOD, pedir:PEDIR_CEL}});
 async function actualizarRegistros(){
   if (!configurado() || !navigator.onLine){ await pintarLista(); return; }
   const b = $('btnRefrescar'); b.disabled = true; $('btnRefTxt').textContent = 'Actualizando…';
   try{
     const r = await llamar('GET', {action:'registros'});
     if (r.ok && Array.isArray(r.datos)){
-      REGS_SERVER = r.datos.map(a => ({dni:a[0], nombre:a[1], fecha:a[2]})); REGS_TS = Date.now();
-      await dbPut('meta', {k:'registros', v:{lista:REGS_SERVER, ts:REGS_TS}});
+      REGS_SERVER = r.datos.map(a => ({dni:a[0], nombre:a[1], fecha:a[2], rutaS:a[3], rutaR:a[4], id:a[5], mods:a[6]}));
+      REGS_TS = Date.now(); MAX_MOD = r.maxMod || 2; PEDIR_CEL = r.pedirCelular !== false;
+      await guardarRegsCache();
     } else if (r.codigo === 'AUTH') pedirCodigo();
   }catch(e){ /* sin conexión: se muestra la copia guardada */ }
   finally { b.disabled = false; $('btnRefTxt').textContent = 'Actualizar lista'; }
@@ -917,10 +968,26 @@ async function construirRegs(){
   const ini = inicioSemanaPago(hora());
   for (const i of await dbAll('outbox')){
     if (i.tipo !== 'viaje' || new Date(i.creadoEn).getTime() < ini || base.has(i.datos.dni)) continue;
-    base.set(i.datos.dni, {dni:i.datos.dni, nombre:i.datos.nombre, fecha:new Date(i.creadoEn).getTime(), pendiente: i.estado !== 'Sincronizado'});
+    base.set(i.datos.dni, {dni:i.datos.dni, nombre:i.datos.nombre, fecha:new Date(i.creadoEn).getTime(),
+      rutaS:i.datos.rutaSalida, rutaR:i.datos.rutaRetorno, id:i.id, mods:0, pendiente: i.estado !== 'Sincronizado'});
   }
   REGS = [...base.values()].map(x => ({...x, hay: norm(x.dni + ' ' + x.nombre)}))
         .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
+}
+function motivoNoModificar(m){
+  if (m.pendiente) return 'Se podrá modificar cuando se sincronice.';
+  if ((m.mods || 0) >= MAX_MOD) return 'Sin intentos disponibles.';
+  if (!estadoHorario(hora()).abierto) return 'El formulario está cerrado.';
+  if (!navigator.onLine) return 'Para modificar necesita internet.';
+  return '';
+}
+function botonModificar(m){
+  const rest = Math.max(0, MAX_MOD - (m.mods || 0));
+  if (m.pendiente) return `<button type="button" class="btn claro chico" disabled>${ico('clock')}Por enviar</button>`;
+  if (rest <= 0) return `<button type="button" class="btn bloq chico" disabled>${ico('lock')}Bloqueado</button><span class="quedan">Sin intentos</span>`;
+  const mot = motivoNoModificar(m);
+  return `<button type="button" class="btn claro chico" data-mod="${esc(m.dni)}" ${mot ? 'disabled title="' + esc(mot) + '"' : ''}>${ico('swap')}Modificar</button>` +
+         `<span class="quedan">${mot ? esc(mot) : `Quedan ${rest} de ${MAX_MOD}`}</span>`;
 }
 async function pintarLista(){
   await construirRegs();
@@ -928,7 +995,7 @@ async function pintarLista(){
   const t = norm(q).split(' ').filter(Boolean);
   const f = t.length ? REGS.filter(m => t.every(x => m.hay.includes(x))) : REGS;
   $('listaMeta').textContent = navigator.onLine
-    ? 'Solo consulta' + (REGS_TS ? ' · actualizado ' + fechaLima(REGS_TS) : '')
+    ? 'Consulta y modificación de rutas' + (REGS_TS ? ' · actualizado ' + fechaLima(REGS_TS) : '')
     : 'Sin conexión · lista guardada' + (REGS_TS ? ' el ' + fechaLima(REGS_TS) : '');
   $('listaConteo').textContent = REGS.length
     ? (t.length ? `${f.length} de ${REGS.length} colaboradores registrados` : `${REGS.length} colaboradores registrados`)
@@ -942,13 +1009,69 @@ async function pintarLista(){
     box.innerHTML = `<div class="vacio">${ico('alert')}<div>No se encontró ningún registro con “${esc(q.trim())}”.</div></div>`;
     return;
   }
-  box.innerHTML = '<div class="fila cab"><span class="dni">DNI</span><span class="nom">APELLIDOS Y NOMBRES</span><span class="fec">FECHA DE REGISTRO</span></div>' +
-    f.slice(0, MAX_FILAS).map(m => `<div class="fila"><span class="dni">${esc(m.dni)}</span><span class="nom">${esc(m.nombre)}${m.pendiente ? '<em class="badge-pend">por enviar</em>' : ''}</span><span class="fec"><i class="pre" style="font-style:normal">Registro: </i>${m.fecha ? fechaLima(m.fecha) : '—'}</span></div>`).join('') +
+  box.innerHTML = '<div class="fila cab"><span class="dni">DNI</span><span class="nom">APELLIDOS Y NOMBRES</span><span class="fec">FECHA DE REGISTRO</span><span class="rs">RUTA SALIDA</span><span class="rr">RUTA RETORNO</span><span class="ac">MODIFICAR</span></div>' +
+    f.slice(0, MAX_FILAS).map(m => `<div class="fila"><span class="dni">${esc(m.dni)}</span><span class="nom">${esc(m.nombre)}${m.pendiente ? '<em class="badge-pend">por enviar</em>' : ''}</span>` +
+      `<span class="fec"><i class="pre">Registro: </i>${m.fecha ? fechaLima(m.fecha) : '—'}</span>` +
+      `<span class="rs"><i class="pre">Salida: </i><b>${esc(m.rutaS || '—')}</b></span>` +
+      `<span class="rr"><i class="pre">Retorno: </i><b>${esc(m.rutaR || '—')}</b></span>` +
+      `<span class="ac">${botonModificar(m)}</span></div>`).join('') +
     (f.length > MAX_FILAS ? `<div class="vacio">Se muestran ${MAX_FILAS} de ${f.length}. Escriba más letras o el DNI para afinar.</div>` : '');
+}
+let avisoTimer;
+function avisoLista(tipo, html){
+  const a = $('listaAviso'); a.className = 'aviso ' + tipo; a.hidden = false;
+  a.innerHTML = ico(tipo === 'verde' ? 'ok' : 'alert') + `<p>${html}</p>`;
+  clearTimeout(avisoTimer); avisoTimer = setTimeout(() => a.hidden = true, 9000);
+}
+
+/* ---- Modificar rutas ---- */
+let editando = null, guardandoMod = false;
+function abrirMod(dni){
+  const m = REGS.find(x => x.dni === dni); if (!m) return;
+  const mot = motivoNoModificar(m); if (mot){ avisoLista('rojo', esc(mot)); return; }
+  editando = m;
+  ['mSalida','mRetorno','mCel'].forEach(c => err(c,''));
+  $('mError').hidden = true; $('mCel').value = '';
+  $('mQuien').innerHTML = `<b>${esc(m.nombre)}</b> · DNI ${esc(m.dni)}`;
+  const rest = MAX_MOD - (m.mods || 0);
+  $('mRestan').textContent = `Le quedan ${rest} de ${MAX_MOD} modificaciones. Al guardar se usa 1 y no se puede deshacer.`;
+  $('mSalida').value = m.rutaS; $('mRetorno').value = m.rutaR;
+  $('mCelBox').hidden = !PEDIR_CEL;
+  $('dlgMod').showModal();
+}
+async function guardarMod(ev){
+  ev.preventDefault();
+  if (guardandoMod || !editando) return;
+  ['mSalida','mRetorno','mCel'].forEach(c => err(c,'')); $('mError').hidden = true;
+  const s = $('mSalida').value, r = $('mRetorno').value, cel = normalizarCelular($('mCel').value);
+  if (s === editando.rutaS && r === editando.rutaR){ err('mSalida','Cambie la ruta de salida y/o la de retorno para guardar.'); return; }
+  if (PEDIR_CEL && !cel){ err('mCel','Escriba su celular de 9 dígitos (el que está registrado).'); return; }
+  const btn = $('mGuardar'); guardandoMod = true; botonCargando(btn, $('mGuardarTxt'), true, 'GUARDANDO…');
+  const falla = (txt) => { $('mErrorTxt').textContent = txt; $('mError').hidden = false; };
+  try{
+    await sincronizarReloj(3500);
+    if (!evaluarHorario()){ $('dlgMod').close(); avisoLista('rojo','🔒 EL PLAZO DE REGISTRO HA FINALIZADO. No se pueden modificar rutas.'); return; }
+    let res;
+    try{ res = await llamar('POST', {action:'modificarRuta', id:editando.id, dni:editando.dni, rutaSalida:s, rutaRetorno:r, celular:cel}); }
+    catch(e){ falla('No se pudo conectar con el servidor. Revise su internet e intente de nuevo. No se gastó ningún intento.'); return; }
+    if (res && res.ok){
+      const x = REGS_SERVER.find(z => z.dni === editando.dni);
+      if (x){ x.rutaS = res.rutaSalida; x.rutaR = res.rutaRetorno; x.mods = res.modificaciones; }
+      await guardarRegsCache();
+      $('dlgMod').close();
+      avisoLista('verde', `Rutas actualizadas para <b>${esc(editando.nombre)}</b>. ` + (res.restantes > 0 ? `Le queda ${res.restantes} modificación.` : 'Ya no tiene más modificaciones disponibles.'));
+      await pintarLista();
+    } else {
+      if (res && res.codigo === 'AUTH'){ $('dlgMod').close(); pedirCodigo(); return; }
+      falla((res && res.mensaje) || 'No se pudo guardar.');
+      if (res && ['LIMITE','FUERA_HORARIO','SEMANA_ANTERIOR','SIN_CAMBIOS','NO_EXISTE'].includes(res.codigo)) actualizarRegistros();
+    }
+  } finally { guardandoMod = false; botonCargando(btn, $('mGuardarTxt'), false, 'GUARDAR CAMBIOS'); }
 }
 function irVista(v){
   const lista = v === 'lista';
   $('vistaRegistro').hidden = lista; $('vistaLista').hidden = !lista;
+  $('wrap').classList.toggle('ancho', lista);
   $('tabRegistro').setAttribute('aria-selected', String(!lista));
   $('tabLista').setAttribute('aria-selected', String(lista));
   history.replaceState(null, '', lista ? '#registros' : location.pathname + location.search);
@@ -964,6 +1087,10 @@ function enlazar(){
   $('bLista').addEventListener('input', pintarLista);
   $('limpiarLista').addEventListener('click', () => { $('bLista').value = ''; pintarLista(); $('bLista').focus(); });
   $('btnRefrescar').addEventListener('click', actualizarRegistros);
+  $('listaRegs').addEventListener('click', e => { const b = e.target.closest('[data-mod]'); if (b) abrirMod(b.dataset.mod); });
+  $('formMod').addEventListener('submit', guardarMod);
+  $('mCancelar').addEventListener('click', () => $('dlgMod').close());
+  $('mCel').addEventListener('input', e => e.target.value = e.target.value.replace(/[^\d+ ]/g,'').slice(0,14));
   $('buscar').addEventListener('input', () => { if (sel && norm($('buscar').value) !== norm(sel.nombre)) deseleccionar(); pintarResultados(); });
   $('buscar').addEventListener('focus', pintarResultados);
   $('limpiar').addEventListener('click', () => { deseleccionar(); $('buscar').value = ''; pintarResultados(); $('buscar').focus(); });
@@ -991,7 +1118,7 @@ function enlazar(){
   $('cCancelar').addEventListener('click', () => $('dlgCodigo').close());
 
   window.addEventListener('online',  async () => { await sincronizarReloj(); evaluarHorario(); actualizarMaestros(); fallos = 0; sincronizar(); pintarEstado(); });
-  window.addEventListener('offline', pintarEstado);
+  window.addEventListener('offline', () => { pintarEstado(); if (!$('vistaLista').hidden) pintarLista(); });
 
   let ev;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); ev = e; $('btnInstalar').hidden = false; });
