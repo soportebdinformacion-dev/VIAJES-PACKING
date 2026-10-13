@@ -372,7 +372,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
    ===================================================================== */
 const CONFIG = {
   // 1) Pegue aquí la URL de la "aplicación web" de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzrayHf4CHcEoR5_pE18IxoARx23JshG8FuPpJ5LQK22VJJ8pOHwQGHoyLvl1H0bsb0tw/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw-ATo3eLFMedf9uuPygttGm5uckeOBJKBuHZjxuSH42ZpMW2_uwoIy0aX2K_1mWB0iaA/exec',
   ZONA: 'America/Lima',      // Zona horaria oficial
   TIMEOUT_MS: 25000,         // Tiempo máximo de espera por envío
   LOTE: 15,                  // Registros por envío al sincronizar
@@ -409,6 +409,7 @@ function uuid(){
    mientras el equipo tenga conexión.
    --------------------------------------------------------------------- */
 let offset = 0;
+let desactiva = null;   // fecha/hora (ms) de desactivación manual, definida en la hoja "config"
 const hora = () => Date.now() + offset;
 const fmtLima = new Intl.DateTimeFormat('en-US',{timeZone:CONFIG.ZONA,hourCycle:'h23',weekday:'short',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const DOW = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
@@ -420,13 +421,15 @@ const fechaLima = ts => { const p = limaParts(ts); return `${pad(p.d)}/${pad(p.m
 /* Miércoles todo el día; jueves hasta antes de las 17:00. Resto: cerrado. */
 function estadoHorario(ts){
   const p = limaParts(ts);
-  const abierto = p.dow === 3 || (p.dow === 4 && p.h < 17);
+  const porHorario = p.dow === 3 || (p.dow === 4 && p.h < 17);
+  const manual = desactiva !== null && ts >= desactiva;      // desactivada a mano
+  const abierto = porHorario && !manual;
   let proxima = null;
-  if (!abierto){
+  if (!abierto && !manual){
     const dias = ((3 - p.dow) + 7) % 7 || 7;
     proxima = new Date(Date.UTC(p.y, p.m-1, p.d + dias));
   }
-  return {abierto, p, proxima};
+  return {abierto, p, proxima, manual};
 }
 
 /* ---------------------------------------------------------------------
@@ -490,6 +493,8 @@ async function sincronizarReloj(timeout = 4000){
     if (r && r.ok && r.ts){
       offset = r.ts - (t0 + t1)/2;
       await dbPut('meta', {k:'offset', v:offset});
+      desactiva = (typeof r.desactiva === 'number') ? r.desactiva : null;
+      await dbPut('meta', {k:'desactiva', v:desactiva});
       return true;
     }
   }catch(e){}
@@ -598,6 +603,10 @@ function evaluarHorario(){
     $('abiertoTxt').textContent = e.p.dow === 3
       ? 'Formulario habilitado hoy (miércoles) hasta las 11:59 p. m. · el jueves cierra a las 05:00 p. m.'
       : 'Formulario habilitado hasta hoy (jueves) a las 05:00 p. m.';
+    if (desactiva !== null) $('abiertoTxt').textContent += ` · Se desactivará el ${fechaLima(desactiva)}.`;
+  } else if (e.manual){
+    $('cerradoCuando').textContent = `La aplicación fue desactivada el ${fechaLima(desactiva)} (hora de Perú). Consulte con el responsable cuándo volverá a habilitarse.`;
+    $('resultados').hidden = true;
   } else {
     const d = e.proxima;
     $('cerradoCuando').textContent = `El formulario estará disponible nuevamente el miércoles ${pad(d.getUTCDate())}/${pad(d.getUTCMonth()+1)}/${d.getUTCFullYear()} desde las 00:00 (hora de Perú).`;
@@ -876,6 +885,7 @@ function enlazar(){
     mostrar('err','Este navegador no permite guardar datos','<p>Abra la aplicación en Chrome (Android) o Safari (iPhone) fuera del modo privado.</p>'); return;
   }
   const o = await dbGet('meta','offset'); if (o) offset = o.v;
+  const dm = await dbGet('meta','desactiva'); if (dm) desactiva = dm.v;
   enlazar();
   await limpiarHistorial();
   await cargarIndice();
@@ -886,6 +896,7 @@ function enlazar(){
     await actualizarMaestros(); sincronizar();
   }
   setInterval(evaluarHorario, 20000);
+  setInterval(async () => { if (navigator.onLine && !guardando) { await sincronizarReloj(); evaluarHorario(); } }, 60000);  // detecta cambios de la fecha manual
   setInterval(async () => {                              // reintentos automáticos controlados
     if (!navigator.onLine || sincronizando || Date.now() < proxAuto) return;
     if ((await dbAll('outbox')).some(i => i.estado === 'Pendiente')) sincronizar();
