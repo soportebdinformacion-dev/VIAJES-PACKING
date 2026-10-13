@@ -142,7 +142,7 @@ Una PWA **solo se instala y funciona sin internet desde una dirección HTTPS**. 
 
 - No necesita volver a publicar el script ni subir archivos: los teléfonos con internet se actualizan en cerca de 1 minuto.
 - Los registros hechos antes de esa fecha (incluso sin internet) siguen sincronizándose.
-- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v5`).
+- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v6`).
 
 ### Habilitar la app manualmente (fuera de miércoles y jueves)
 
@@ -167,3 +167,30 @@ La app tiene dos pestañas: **Registrar** y **Registros**. La segunda muestra ú
 - Se puede abrir directo con el enlace de la app terminado en `#registros`.
 - Si activó `CODIGO_ACCESO`, esta pestaña también lo exige (los nombres y DNI son datos personales).
 - Después de pegar el nuevo `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5) y suba otra vez `index.html` y `service-worker.js`.
+
+
+## 13. Modificar rutas desde "Registros" (máximo 2 intentos)
+
+En la pestaña **Registros** cada persona se ve con: DNI, APELLIDOS Y NOMBRES, FECHA DE REGISTRO, **RUTA SALIDA**, **RUTA RETORNO** y el botón **Modificar**.
+
+**Cómo funciona**
+1. El colaborador toca **Modificar**, cambia la ruta de salida y/o la de retorno y escribe su **celular** para confirmar que el registro es suyo.
+2. Al guardar, la app actualiza las columnas **RUTA SALIDA** y **RUTA RETORNO** de la hoja `packing`.
+3. Cada registro tiene **2 modificaciones** (`MAX_MODIFICACIONES` en `Codigo.gs`). Solo se gasta un intento cuando el cambio se guarda de verdad. Si el celular es incorrecto, si no hay cambios o si falla la conexión, **no se gasta intento**.
+4. Con las 2 modificaciones usadas, el botón queda **gris y bloqueado ("Bloqueado – Sin intentos")** y el servidor rechaza cualquier cambio posterior, aunque alguien intente saltarse la pantalla.
+
+**Reglas**
+- Solo se puede modificar con **internet** y con el formulario **habilitado** (miércoles/jueves hasta las 5:00 p. m., o según su fecha manual de la hoja `config`). Fuera de ese plazo el botón aparece deshabilitado.
+- Solo se pueden modificar registros de la **semana de pago actual**.
+- Se modifica el registro **más reciente** de cada DNI (el que se ve en la lista). Los registros "por enviar" se podrán modificar cuando se sincronicen.
+- Tras 5 celulares incorrectos para un mismo DNI, se bloquea 10 minutos. Si no quiere pedir el celular, ponga `PEDIR_CELULAR_PARA_MODIFICAR: false` (cualquiera podría modificar el registro de otro; no se recomienda).
+
+**Hoja `packing`: columnas nuevas** (ejecute `configurarHojas` otra vez para que se agreguen los encabezados)
+
+| Columna | Contenido |
+|---|---|
+| K · MODIFICACIONES | Cuántas veces se modificó (0, 1 o 2). |
+| L · FECHA ULTIMA MODIFICACION | Fecha y hora del último cambio. |
+| M · HISTORIAL MODIFICACIONES | Cada cambio: fecha, ruta anterior y ruta nueva. |
+
+**Para actualizar:** pegue el nuevo `Codigo.gs`, ejecute `configurarHojas` una vez, publique una **nueva versión** (sección 4, paso 5) y suba otra vez `index.html` y `service-worker.js`.
