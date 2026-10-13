@@ -142,7 +142,7 @@ Una PWA **solo se instala y funciona sin internet desde una dirección HTTPS**. 
 
 - No necesita volver a publicar el script ni subir archivos: los teléfonos con internet se actualizan en cerca de 1 minuto.
 - Los registros hechos antes de esa fecha (incluso sin internet) siguen sincronizándose.
-- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v3`).
+- Si hizo cambios en `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5). Los teléfonos recibirán el cambio en `index.html` al abrir la app con internet (`VERSION` ya quedó en `v4`).
 
 ### Habilitar la app manualmente (fuera de miércoles y jueves)
 
@@ -155,3 +155,15 @@ En la hoja **`config`** (ejecute `configurarHojas` otra vez para que aparezca la
 
 Ejemplo: B2 = `12/10/2026 08:00` y B1 = `13/10/2026 18:00` → la app está abierta desde el lunes 12 a las 8:00 hasta el martes 13 a las 18:00.
 Si deja B2 con una fecha pasada y B1 vacío, la app **seguirá abierta**; para volver al horario normal, borre B2.
+
+
+## 12. Pestaña "Registros" (solo visualización)
+
+La app tiene dos pestañas: **Registrar** y **Registros**. La segunda muestra únicamente **DNI** y **APELLIDOS Y NOMBRES** de quienes ya tienen un registro guardado, con el mismo buscador (parcial, sin tildes ni mayúsculas, por DNI o por nombre). No muestra celular, área ni rutas, y no permite modificar nada.
+
+- Muestra los registros de la **semana de pago actual** (desde el último miércoles 00:00, hora de Perú), una sola vez por DNI. Para ver **todos** los registros históricos, cambie `SOLO_SEMANA_ACTUAL: true` a `false` en `Codigo.gs`.
+- Si un colaborador guardó su registro sin internet, aparece en su teléfono con la etiqueta **"por enviar"** hasta que se sincronice.
+- Sin internet se muestra la última lista descargada, con su fecha.
+- Se puede abrir directo con el enlace de la app terminado en `#registros`.
+- Si activó `CODIGO_ACCESO`, esta pestaña también lo exige (los nombres y DNI son datos personales).
+- Después de pegar el nuevo `Codigo.gs`, publique una **nueva versión** (sección 4, paso 5) y suba otra vez `index.html` y `service-worker.js`.
