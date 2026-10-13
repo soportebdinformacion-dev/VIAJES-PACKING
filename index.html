@@ -156,6 +156,21 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
 @media(min-width:480px){.dlg .botones{grid-template-columns:1fr 1fr}}
 .nota-dlg{margin-top:10px}
 
+
+/* ---------- Pestañas y lista de registros ---------- */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#E4ECD9;padding:5px;border-radius:15px;margin:14px 0 0}
+.tab{display:flex;align-items:center;justify-content:center;gap:8px;min-height:50px;border:0;border-radius:11px;background:transparent;color:var(--tinta-2);font:inherit;font-size:15.5px;font-weight:700;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--blanco);color:var(--verde-osc);box-shadow:0 1px 3px rgba(36,48,36,.18)}
+.tabla{max-height:62vh;overflow:auto;margin-top:12px;border:1px solid var(--linea);border-radius:12px;padding:0 12px;-webkit-overflow-scrolling:touch}
+.fila{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #EDF2E6;font-size:15px;align-items:start}
+.fila:last-child{border-bottom:0}
+.fila .dni{font-variant-numeric:tabular-nums;font-weight:700;color:var(--verde-osc)}
+.fila .nom{overflow-wrap:anywhere}
+.fila.cab{position:sticky;top:0;background:var(--blanco);font-size:12.5px;font-weight:800;color:var(--tinta-2);padding:9px 0;z-index:1}
+.fila.cab .dni{color:var(--tinta-2)}
+.conteo{margin:10px 2px 0;color:var(--tinta-2);font-size:13.5px}
+.vacio{padding:18px 4px;color:var(--tinta-2);display:flex;gap:10px;align-items:flex-start;font-size:14.5px}
+
 @media(prefers-reduced-motion:reduce){.girar,.spin{animation-duration:3s}}
 </style>
 </head>
@@ -225,6 +240,13 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     <div><p><b>Falta configurar la aplicación.</b></p><p>Abra index.html y pegue la URL de Apps Script en <code>APPS_SCRIPT_URL</code>.</p></div>
   </div>
 
+  <!-- Pestañas -->
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button id="tabRegistro" type="button" class="tab" role="tab" aria-selected="true"><svg class="ico"><use href="#i-send"/></svg>Registrar</button>
+    <button id="tabLista" type="button" class="tab" role="tab" aria-selected="false"><svg class="ico"><use href="#i-list"/></svg>Registros</button>
+  </nav>
+
+  <div id="vistaRegistro">
   <!-- Mensaje informativo -->
   <div class="info-box">
     <div class="aviso verde">
@@ -316,6 +338,23 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
     <h2><span class="badge rojo"><svg class="ico"><use href="#i-list"/></svg></span><span>Envíos por sincronizar<small>Se guardan en este dispositivo hasta confirmarse</small></span></h2>
     <div id="listaPend"></div>
   </section>
+  </div><!-- /vistaRegistro -->
+
+  <!-- =================== PESTAÑA: REGISTROS GUARDADOS (solo visualización) =================== -->
+  <section id="vistaLista" hidden>
+    <div class="card">
+      <h2><span class="badge"><svg class="ico"><use href="#i-users"/></svg></span><span>Registros guardados<small id="listaMeta">Solo consulta</small></span></h2>
+      <label for="bLista"><svg class="ico"><use href="#i-search"/></svg>DNI O APELLIDOS Y NOMBRES</label>
+      <div class="campo buscar">
+        <svg class="ico"><use href="#i-search"/></svg>
+        <input id="bLista" type="text" inputmode="search" enterkeyhint="search" placeholder="Ej.: 42048377 o CHAVEZ" autocapitalize="characters" spellcheck="false" autocomplete="off">
+        <button id="limpiarLista" type="button" class="limpiar" aria-label="Borrar búsqueda" hidden><svg class="ico"><use href="#i-x"/></svg></button>
+      </div>
+      <p id="listaConteo" class="conteo" aria-live="polite"></p>
+      <div id="listaRegs" class="tabla"></div>
+      <div class="accion" style="margin-bottom:0"><button id="btnRefrescar" type="button" class="btn claro"><svg class="ico"><use href="#i-sync"/></svg><span id="btnRefTxt">Actualizar lista</span></button></div>
+    </div>
+  </section>
 
   <footer>Agrícola Huarmey · Packing – Campamento · Hora de referencia: Perú (America/Lima)</footer>
 </main>
@@ -372,7 +411,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
    ===================================================================== */
 const CONFIG = {
   // 1) Pegue aquí la URL de la "aplicación web" de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyu3VBmI8oa4EtURsccdr3Gi0LynFELBhBgJzlvtd7uX7HurtXvTdVxxuTZEkAIlsFD/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwlEcIwOl4q8E6D49b7HtWk_t06HXAEIvy_pbiGnn0JE7gwW5nG0CGue4S752MQ_VLs1g/exec',
   ZONA: 'America/Lima',      // Zona horaria oficial
   TIMEOUT_MS: 25000,         // Tiempo máximo de espera por envío
   LOTE: 15,                  // Registros por envío al sincronizar
@@ -692,6 +731,7 @@ async function _sincronizar(){
   } finally {
     sincronizando = false;
     await cargarIndice(); await pintarEstado();
+    if (!$('vistaLista').hidden) actualizarRegistros();
   }
 }
 async function limpiarHistorial(){
@@ -843,9 +883,84 @@ function pedirCodigo(){
 }
 
 /* ---------------------------------------------------------------------
+   Pestaña "Registros": solo visualización (DNI y APELLIDOS Y NOMBRES)
+   --------------------------------------------------------------------- */
+let REGS_SERVER = [], REGS_TS = 0, REGS = [];
+const MAX_FILAS = 150;
+const inicioSemanaPago = ts => {                         // miércoles 00:00 de Lima (en ms)
+  const p = limaParts(ts), dias = (p.dow - 3 + 7) % 7;
+  return Date.UTC(p.y, p.m-1, p.d - dias) + 5*3600000;
+};
+async function cargarRegsCache(){
+  const m = await dbGet('meta','registros');
+  if (m && m.v){ REGS_SERVER = m.v.lista || []; REGS_TS = m.v.ts || 0; }
+}
+async function actualizarRegistros(){
+  if (!configurado() || !navigator.onLine){ await pintarLista(); return; }
+  const b = $('btnRefrescar'); b.disabled = true; $('btnRefTxt').textContent = 'Actualizando…';
+  try{
+    const r = await llamar('GET', {action:'registros'});
+    if (r.ok && Array.isArray(r.datos)){
+      REGS_SERVER = r.datos.map(a => ({dni:a[0], nombre:a[1]})); REGS_TS = Date.now();
+      await dbPut('meta', {k:'registros', v:{lista:REGS_SERVER, ts:REGS_TS}});
+    } else if (r.codigo === 'AUTH') pedirCodigo();
+  }catch(e){ /* sin conexión: se muestra la copia guardada */ }
+  finally { b.disabled = false; $('btnRefTxt').textContent = 'Actualizar lista'; }
+  await pintarLista();
+}
+/* Une la lista del servidor con los registros de este teléfono que aún no llegan (marcados "por enviar") */
+async function construirRegs(){
+  const base = new Map(REGS_SERVER.map(x => [x.dni, {...x, pendiente:false}]));
+  const ini = inicioSemanaPago(hora());
+  for (const i of await dbAll('outbox')){
+    if (i.tipo !== 'viaje' || new Date(i.creadoEn).getTime() < ini || base.has(i.datos.dni)) continue;
+    base.set(i.datos.dni, {dni:i.datos.dni, nombre:i.datos.nombre, pendiente: i.estado !== 'Sincronizado'});
+  }
+  REGS = [...base.values()].map(x => ({...x, hay: norm(x.dni + ' ' + x.nombre)}))
+        .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
+}
+async function pintarLista(){
+  await construirRegs();
+  const q = $('bLista').value; $('limpiarLista').hidden = !q;
+  const t = norm(q).split(' ').filter(Boolean);
+  const f = t.length ? REGS.filter(m => t.every(x => m.hay.includes(x))) : REGS;
+  $('listaMeta').textContent = navigator.onLine
+    ? 'Solo consulta' + (REGS_TS ? ' · actualizado ' + fechaLima(REGS_TS) : '')
+    : 'Sin conexión · lista guardada' + (REGS_TS ? ' el ' + fechaLima(REGS_TS) : '');
+  $('listaConteo').textContent = REGS.length
+    ? (t.length ? `${f.length} de ${REGS.length} colaboradores registrados` : `${REGS.length} colaboradores registrados`)
+    : '';
+  const box = $('listaRegs');
+  if (!REGS.length){
+    box.innerHTML = `<div class="vacio">${ico('list')}<div>${REGS_TS || navigator.onLine ? 'Aún no hay registros guardados en esta semana de pago.' : 'Conéctese a internet para ver la lista de registros.'}</div></div>`;
+    return;
+  }
+  if (!f.length){
+    box.innerHTML = `<div class="vacio">${ico('alert')}<div>No se encontró ningún registro con “${esc(q.trim())}”.</div></div>`;
+    return;
+  }
+  box.innerHTML = '<div class="fila cab"><span class="dni">DNI</span><span class="nom">APELLIDOS Y NOMBRES</span></div>' +
+    f.slice(0, MAX_FILAS).map(m => `<div class="fila"><span class="dni">${esc(m.dni)}</span><span class="nom">${esc(m.nombre)}${m.pendiente ? '<em class="badge-pend">por enviar</em>' : ''}</span></div>`).join('') +
+    (f.length > MAX_FILAS ? `<div class="vacio">Se muestran ${MAX_FILAS} de ${f.length}. Escriba más letras o el DNI para afinar.</div>` : '');
+}
+function irVista(v){
+  const lista = v === 'lista';
+  $('vistaRegistro').hidden = lista; $('vistaLista').hidden = !lista;
+  $('tabRegistro').setAttribute('aria-selected', String(!lista));
+  $('tabLista').setAttribute('aria-selected', String(lista));
+  history.replaceState(null, '', lista ? '#registros' : location.pathname + location.search);
+  if (lista){ pintarLista(); if (navigator.onLine && Date.now() - REGS_TS > 30000) actualizarRegistros(); }
+}
+
+/* ---------------------------------------------------------------------
    Arranque y eventos
    --------------------------------------------------------------------- */
 function enlazar(){
+  $('tabRegistro').addEventListener('click', () => irVista('registro'));
+  $('tabLista').addEventListener('click', () => irVista('lista'));
+  $('bLista').addEventListener('input', pintarLista);
+  $('limpiarLista').addEventListener('click', () => { $('bLista').value = ''; pintarLista(); $('bLista').focus(); });
+  $('btnRefrescar').addEventListener('click', actualizarRegistros);
   $('buscar').addEventListener('input', () => { if (sel && norm($('buscar').value) !== norm(sel.nombre)) deseleccionar(); pintarResultados(); });
   $('buscar').addEventListener('focus', pintarResultados);
   $('limpiar').addEventListener('click', () => { deseleccionar(); $('buscar').value = ''; pintarResultados(); $('buscar').focus(); });
@@ -894,8 +1009,9 @@ function enlazar(){
   const hm = await dbGet('meta','habilita'); if (hm) habilita = hm.v;
   enlazar();
   await limpiarHistorial();
-  await cargarIndice();
+  await cargarIndice(); await cargarRegsCache();
   evaluarHorario(); await pintarEstado();
+  if (location.hash === '#registros') irVista('lista');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
   if (navigator.onLine){
     await sincronizarReloj(); evaluarHorario();
