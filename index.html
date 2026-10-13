@@ -168,6 +168,9 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
 .fila .nom{overflow-wrap:anywhere}
 .fila.cab{position:sticky;top:0;background:var(--blanco);font-size:12.5px;font-weight:800;color:var(--tinta-2);padding:9px 0;z-index:1}
 .fila.cab .dni{color:var(--tinta-2)}
+.fila .fec{grid-column:2;font-size:13px;color:var(--tinta-2);font-variant-numeric:tabular-nums}
+.fila.cab .fec{display:none}
+@media(min-width:520px){.fila{grid-template-columns:92px 1fr 140px}.fila .fec{grid-column:auto;font-size:14.5px;color:var(--tinta)}.fila.cab .fec{display:block}.fila .pre{display:none}}
 .conteo{margin:10px 2px 0;color:var(--tinta-2);font-size:13.5px}
 .vacio{padding:18px 4px;color:var(--tinta-2);display:flex;gap:10px;align-items:flex-start;font-size:14.5px}
 
@@ -411,7 +414,7 @@ dialog::backdrop{background:rgba(25,40,20,.55)}
    ===================================================================== */
 const CONFIG = {
   // 1) Pegue aquí la URL de la "aplicación web" de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwlEcIwOl4q8E6D49b7HtWk_t06HXAEIvy_pbiGnn0JE7gwW5nG0CGue4S752MQ_VLs1g/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxW9vVzB6GA8gf3qdPkw7I8jrevNv6vSjnyP5QLwyMBdYpvXtdvTHCceDSIeH7EeXyELg/exec',
   ZONA: 'America/Lima',      // Zona horaria oficial
   TIMEOUT_MS: 25000,         // Tiempo máximo de espera por envío
   LOTE: 15,                  // Registros por envío al sincronizar
@@ -901,7 +904,7 @@ async function actualizarRegistros(){
   try{
     const r = await llamar('GET', {action:'registros'});
     if (r.ok && Array.isArray(r.datos)){
-      REGS_SERVER = r.datos.map(a => ({dni:a[0], nombre:a[1]})); REGS_TS = Date.now();
+      REGS_SERVER = r.datos.map(a => ({dni:a[0], nombre:a[1], fecha:a[2]})); REGS_TS = Date.now();
       await dbPut('meta', {k:'registros', v:{lista:REGS_SERVER, ts:REGS_TS}});
     } else if (r.codigo === 'AUTH') pedirCodigo();
   }catch(e){ /* sin conexión: se muestra la copia guardada */ }
@@ -914,7 +917,7 @@ async function construirRegs(){
   const ini = inicioSemanaPago(hora());
   for (const i of await dbAll('outbox')){
     if (i.tipo !== 'viaje' || new Date(i.creadoEn).getTime() < ini || base.has(i.datos.dni)) continue;
-    base.set(i.datos.dni, {dni:i.datos.dni, nombre:i.datos.nombre, pendiente: i.estado !== 'Sincronizado'});
+    base.set(i.datos.dni, {dni:i.datos.dni, nombre:i.datos.nombre, fecha:new Date(i.creadoEn).getTime(), pendiente: i.estado !== 'Sincronizado'});
   }
   REGS = [...base.values()].map(x => ({...x, hay: norm(x.dni + ' ' + x.nombre)}))
         .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
@@ -939,8 +942,8 @@ async function pintarLista(){
     box.innerHTML = `<div class="vacio">${ico('alert')}<div>No se encontró ningún registro con “${esc(q.trim())}”.</div></div>`;
     return;
   }
-  box.innerHTML = '<div class="fila cab"><span class="dni">DNI</span><span class="nom">APELLIDOS Y NOMBRES</span></div>' +
-    f.slice(0, MAX_FILAS).map(m => `<div class="fila"><span class="dni">${esc(m.dni)}</span><span class="nom">${esc(m.nombre)}${m.pendiente ? '<em class="badge-pend">por enviar</em>' : ''}</span></div>`).join('') +
+  box.innerHTML = '<div class="fila cab"><span class="dni">DNI</span><span class="nom">APELLIDOS Y NOMBRES</span><span class="fec">FECHA DE REGISTRO</span></div>' +
+    f.slice(0, MAX_FILAS).map(m => `<div class="fila"><span class="dni">${esc(m.dni)}</span><span class="nom">${esc(m.nombre)}${m.pendiente ? '<em class="badge-pend">por enviar</em>' : ''}</span><span class="fec"><i class="pre" style="font-style:normal">Registro: </i>${m.fecha ? fechaLima(m.fecha) : '—'}</span></div>`).join('') +
     (f.length > MAX_FILAS ? `<div class="vacio">Se muestran ${MAX_FILAS} de ${f.length}. Escriba más letras o el DNI para afinar.</div>` : '');
 }
 function irVista(v){
