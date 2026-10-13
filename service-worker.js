@@ -5,7 +5,7 @@
    VERSION (por ejemplo 'v2') para que los teléfonos descarguen la
    versión nueva.
    ===================================================================== */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'huarmey-packing-' + VERSION;
 const RECURSOS = [
   './',
