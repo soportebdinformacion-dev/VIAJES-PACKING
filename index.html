@@ -937,7 +937,7 @@ function pedirCodigo(){
    (el servidor decide: máximo de intentos, horario y propiedad del registro)
    --------------------------------------------------------------------- */
 let REGS_SERVER = [], REGS_TS = 0, REGS = [];
-let MAX_MOD = 2, PEDIR_CEL = true;
+let MAX_MOD = 0, PEDIR_CEL = true;
 const MAX_FILAS = 150;
 const inicioSemanaPago = ts => {                         // miércoles 00:00 de Lima (en ms)
   const p = limaParts(ts), dias = (p.dow - 3 + 7) % 7;
